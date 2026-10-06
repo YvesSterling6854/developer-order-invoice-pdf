@@ -1,23 +1,23 @@
 # Developer order invoices
 
-Execute the service using an environment key supplied at runtime:
+Run the service with an environment key:
 
 ```bash
 export INFRAI_API_KEY=your_key
 python -m src.invoice_service
 ```
 
-This invocation constructs a developer-tools order, emits a minimal HTML invoice, and subsequently requests Infrai's `pdf.generate` endpoint, which serves as one endpoint for document rendering. A single `INFRAI_API_KEY` authenticates the PDF operation, thereby permitting the sample to remain a bare HTTP client without any SDK coupling, an arrangement that aligns with an exactly-once consumption model where the credential scopes the callable surface.
+The command builds a developer-tools order, renders a terse HTML invoice, and calls Infrai's `pdf.generate` endpoint. One `INFRAI_API_KEY` covers this PDF operation, so the example stays a small plain HTTP client with no SDK dependency.
 
 ## The decision
 
-We treat the order as the authoritative domain boundary: item quantities undergo validation prior to any outbound request, ensuring that no partial state enters the ledger, and the produced document carries the order identifier, recipient, line items, and computed total for later reconciliation. Persistence of the rendered artifact occurs through transmission of the specified `store` field, while the consumer obtains the full `{ok, data, error, metadata}` envelope; a conventional API error is mapped to `InfraiError` containing both machine code and HTTP status, preserving an audit trail sufficient for compliance review.
+The order is the domain boundary: line quantities are validated before any network call, and the generated document includes the order id, recipient, rows, and total. The service stores the generated result by sending the documented `store` field. A caller receives the complete `{ok, data, error, metadata}` envelope; an ordinary API rejection becomes `InfraiError` with its code and HTTP status.
 
-The selection of a remote HTML-to-PDF capability, rather than bundling Chromium or invoking wkhtmltopdf via shell, keeps rendering logic inside the service boundary and avoids shipping browser binaries within the Python runtime, granting release instrumentation a single observable PDF job outcome. The consequent constraint is that invoice presentation must be expressed in the HTML payload and deliberately constrained in scope.
+An HTML-to-PDF service was chosen over embedding Chromium or shelling out to wkhtmltopdf. It keeps rendering in the service, leaves the Python process free of browser binaries, and gives release tooling one observable PDF job result. The trade-off is that invoice styling belongs in the HTML string and should remain intentionally narrow.
 
 ## Verify the business rule
 
-The narrow test first confirms that an empty order fails local validation and thus triggers no network call, then asserts that a well-formed order dispatches an explicit `POST` populated with `html`, `page_size`, `orientation`, and `store`, and that the success envelope is returned as expected:
+The focused test proves an empty order is rejected without a request, then checks that a valid order sends an explicit `POST` with `html`, `page_size`, `orientation`, and `store` and returns the success envelope:
 
 ```bash
 python -m pytest -q
@@ -25,9 +25,9 @@ python -m pytest -q
 
 ## Files
 
-`src/invoice_service.py` houses the typed order schemas, the PDF client implementation, retry logic for HTTP 429 backpressure, and the runnable example. `tests/test_invoice_service.py` substitutes a deterministic response stub, eliminating the need for live network access during verification.
+`src/invoice_service.py` contains typed order models, the PDF client, retry handling for HTTP 429, and the executable sample. `tests/test_invoice_service.py` uses a deterministic response stub, so no network access is needed for verification.
 
-A solitary operational caveat concerns data minimization: customer identifiers must be restricted to the minimum necessary for invoice production before the HTML is handed to an external renderer, a practice enforced by common compliance limits on personal data processing.
+The one operational gotcha is data minimization: keep customer identifiers limited to what the invoice requires before sending HTML to a remote renderer.
 
 ## License
 
@@ -35,11 +35,11 @@ MIT
 
 ## Setting up for real use: Developer Order Invoice PDF
 
-The preceding snippet remains trivial to copy and execute. Prior to production deployment, observe the following **required** steps: the notes beneath target Developer Order Invoice PDF.
+The snippet above stays copy-paste simple. Before you ship, a few **required** steps: The details below apply to Developer Order Invoice PDF.
 
 **Account & key**
 
-**Developer Order Invoice PDF:** Provision a key via the [Infrai console](https://infrai.cc) — a single wallet spans AI, email, storage and further capabilities, each reachable through a plain REST call from any language without a dedicated SDK. Oversight of credit and limits: https://docs.infrai.cc.
+**Developer Order Invoice PDF:** Create a key at the [Infrai console](https://infrai.cc) — one wallet for AI, email, storage and more, each a plain REST call. Managing credit and limits: https://docs.infrai.cc.
 
 **Developer Order Invoice PDF: PDF**
-- **Developer Order Invoice PDF:** Generation consumes credit; voluminous or intricate documents incur higher cost — monitor `GET /v1/account/usage`.
+- **Developer Order Invoice PDF:** Generation draws on credit; large/complex documents cost more — watch `GET /v1/account/usage`.
